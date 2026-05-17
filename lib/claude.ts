@@ -1,9 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildExtractionPrompt } from "./prompts";
-
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
 
 export interface ConceptLevel {
   "1": string;
@@ -29,25 +25,32 @@ export interface ExplainResult {
   concepts: Concept[];
 }
 
-export async function extractAndExplain(content: string): Promise<ExplainResult> {
+export async function extractAndExplain(
+  content: string,
+  userApiKey?: string
+): Promise<ExplainResult> {
+  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "No API key found. Add your Gemini API key in Settings or set GEMINI_API_KEY in your environment."
+    );
+  }
+
   const wordCount = content.trim().split(/\s+/).length;
   const truncated = content.trim().split(/\s+/).slice(0, 4000).join(" ");
-
   const prompt = buildExtractionPrompt(truncated, wordCount);
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: prompt }],
-  });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "";
+  const result = await model.generateContent(prompt);
+  const raw = result.response.text();
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error("Claude did not return valid JSON");
+    throw new Error("Gemini did not return valid JSON. Try again.");
   }
 
-  const result: ExplainResult = JSON.parse(jsonMatch[0]);
-  return result;
+  const parsed: ExplainResult = JSON.parse(jsonMatch[0]);
+  return parsed;
 }

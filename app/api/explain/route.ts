@@ -3,7 +3,7 @@ import { extractAndExplain } from "@/lib/claude";
 
 export async function POST(req: NextRequest) {
   try {
-    const { content } = await req.json();
+    const { content, apiKey } = await req.json();
 
     if (!content || typeof content !== "string" || content.trim().length < 50) {
       return NextResponse.json(
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await extractAndExplain(content);
+    const result = await extractAndExplain(content, apiKey || undefined);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to process content";
