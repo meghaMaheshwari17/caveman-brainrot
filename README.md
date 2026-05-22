@@ -1,46 +1,89 @@
 # 🪨 Caveman Brainrot
 
-> Skip the video. Get the knowledge.
+> Ask anything. Get the answer in brainrot. Evolve it to expert depth.
 
-Paste any YouTube URL or raw text and get the key concepts explained at 5 levels of complexity — from caveman grunt all the way to expert depth. Hit **Evolve** on any concept card to level up the explanation.
-
-**Live demo:** _link coming after deploy_
+**Live app → [caveman-brainrot.vercel.app](https://caveman-brainrot.vercel.app)**
 
 ---
 
 ## What it does
 
-Most AI summarizers just shrink content. This one does something different:
+Type any question — `explain caching`, `what is docker`, `why do we need indexes` — and get the answer explained in short numbered lines that build a story from start to finish. Pick your level before asking. Switch levels to hear the same concept explained differently.
 
-1. **Extracts load-bearing concepts** — the ideas without which the whole topic collapses (4–8 per input)
-2. **Explains each at 5 evolution levels**, all generated in one shot:
+```
+you:  explain caching
 
-| Level | Name | Style |
+🪨    1. database good
+      2. many people want database
+      3. many people → database slow
+      4. DATABASE CRY
+
+      5. cache like rock near cave
+      6. store answer in cache
+      7. no need go to database
+      8. DATABASE HAPPY
+```
+
+---
+
+## The 5 levels
+
+| # | Level | Style |
 |---|---|---|
-| 🪨 1 | Caveman | 3–6 word sentences. Fire. Hunt. Tribe. |
-| 🧸 2 | Toddler | Toys, juice boxes, playground analogies |
-| 🎮 3 | Middle Schooler | Minecraft, Discord, gaming references |
-| 🧠 4 | Normal Human | Smart-friend explanation with real analogies |
-| 🔬 5 | Expert | Full technical depth, trade-offs, alternatives |
+| 🪨 1 | Caveman | 3–6 words. Broken grammar. Caps. Primitive words only. |
+| 🧸 2 | Toddler | Toys, cookies, juice box analogies. "It's like when you..." |
+| 🎮 3 | Middle Schooler | Minecraft, Discord, lag, Wi-Fi analogies. One real term in `[brackets]`. |
+| 🧠 4 | Normal Human | Smart-friend tone. Technical terms defined in (parentheses). One real analogy. |
+| 🔬 5 | Expert | Full precision. O() notation. Trade-offs. Alternatives. No hand-holding. |
 
-3. **Tap Evolve** to level up a concept, or **Dumb it down** to go back
-4. Shows a **compression ratio** — how much faster this is vs watching the full video
+Pick a level → ask a question → get the answer in that exact style.
 
 ---
 
 ## Tech stack
 
-- **Framework:** Next.js 16 (App Router) + TypeScript
-- **AI:** Google Gemini 2.0 Flash via `@google/generative-ai`
-- **Transcripts:** `youtube-transcript` — no YouTube API key needed
-- **Styling:** Tailwind CSS
-- **Deploy:** Vercel
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 16 (App Router) + TypeScript |
+| AI pipeline | **LangGraph** — 3-node graph with automatic retry on bad output |
+| LLM providers | Groq / Gemini / OpenAI via **LangChain** unified interface |
+| Default model | On-prem **Devstral** (configurable via env) |
+| Styling | Tailwind CSS |
+| Deploy | Vercel |
+
+---
+
+## How the AI pipeline works (LangGraph)
+
+Every question runs through a LangGraph state machine:
+
+```
+START → invoke_model → validate → [valid: END | retry: invoke_model]
+```
+
+- **invoke_model** — calls whichever model is configured (Devstral / Groq / Gemini / OpenAI) via LangChain's unified `.invoke()` interface
+- **validate** — checks the response has at least 3 numbered lines
+- **retry edge** — if output is malformed, loops back with a format reminder (max 2 attempts)
+
+This means the app never crashes on a bad model response — it self-corrects.
+
+---
+
+## Provider priority
+
+The app resolves which model to use in this order:
+
+1. **User's own key** set in ⚙️ Settings (Groq / Gemini / OpenAI)
+2. **On-prem Devstral** via `DEVSTRAL_BASE_URL` + `DEVSTRAL_API_KEY` (server default)
+3. `GROQ_API_KEY` env fallback
+4. `OPENAI_API_KEY` env fallback
+5. `GEMINI_API_KEY` env fallback
+
+Users can bring their own key without touching any server config — just open Settings.
 
 ---
 
 ## Running locally
-
-**1. Clone and install**
 
 ```bash
 git clone https://github.com/meghaMaheshwari17/caveman-brainrot.git
@@ -48,26 +91,26 @@ cd caveman-brainrot
 npm install
 ```
 
-**2. Get a Gemini API key**
+Create `.env.local` with at least one key:
 
-Go to [aistudio.google.com](https://aistudio.google.com) → Get API Key → Create API Key. Free tier is enough.
+```env
+# On-prem Devstral (if you have it)
+DEVSTRAL_BASE_URL=http://your-server:port/v1
+DEVSTRAL_API_KEY=your-key
+DEVSTRAL_MODEL=devstral
 
-**3. Add it to `.env.local`**
-
-```bash
-cp .env.local.example .env.local
-# then paste your key into GEMINI_API_KEY
+# Or use any of these free/paid fallbacks
+GROQ_API_KEY=       # Free — get at console.groq.com
+OPENAI_API_KEY=
+GEMINI_API_KEY=
 ```
-
-**4. Run**
 
 ```bash
 npm run dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-> You can also add your Gemini key directly in the app via the ⚙️ Settings button — no env file needed.
+> No env key? Open ⚙️ Settings in the app and paste your own Groq / Gemini / OpenAI key. Nothing is stored server-side.
 
 ---
 
@@ -75,42 +118,41 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ```
 app/
-  page.tsx                  # Main UI and state
+  page.tsx                  # Chat-style Q&A UI, level picker, history
   api/
-    explain/route.ts        # Calls Gemini, returns concepts + all 5 levels
-    transcript/route.ts     # Fetches YouTube transcript from URL
+    explain/route.ts        # Accepts question + level, runs LangGraph pipeline
+    transcript/route.ts     # YouTube transcript fetcher (utility)
 components/
-  InputSection.tsx          # URL / paste text toggle
-  ConceptCard.tsx           # Single concept with evolve animation
-  OutputSection.tsx         # Grid of cards + compression stats
-  SettingsModal.tsx         # API key input, stored in localStorage
+  AnswerDisplay.tsx         # Renders numbered-line brainrot answer with → arrows
+  SettingsModal.tsx         # Provider picker (Groq/Gemini/OpenAI) + key input
 lib/
-  claude.ts                 # Gemini SDK wrapper
-  prompts.ts                # Detailed prompts for all 5 evolution levels
-  transcript.ts             # YouTube video ID extraction + transcript fetch
+  claude.ts                 # LangGraph pipeline + LangChain model factory
+  prompts.ts                # Level rules + brainrot format prompt builder
+  transcript.ts             # YouTube URL → plain text transcript
 ```
 
 ---
 
-## Deploying to Vercel
+## Getting a free API key
+
+**Groq** is the recommended option — free, fast, and uses Llama 3.3 70B.
+
+1. Go to [console.groq.com/keys](https://console.groq.com/keys)
+2. Sign up → Create API Key
+3. Paste it in ⚙️ Settings inside the app
+
+Other options:
+- **Gemini:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — free tier
+- **OpenAI:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys) — paid
+
+---
+
+## Deploy your own
 
 ```bash
+npm i -g vercel
 vercel login
 vercel --prod
 ```
 
-Add `GEMINI_API_KEY` as an environment variable in your Vercel project settings. Users can also supply their own key via the in-app Settings panel.
-
----
-
-## How the prompts work
-
-The extraction prompt is highly engineered. For each of the 5 levels, it enforces:
-
-- **Level 1:** Vocabulary is literally restricted to ~30 primitive words. Every sentence ≤ 6 words. Caps for emphasis. Always starts with "UGH."
-- **Level 2:** Must use a toy/snack analogy. Must include "It's like when you...". Max 2-syllable words.
-- **Level 3:** Must use a gaming/YouTube analogy. Must introduce exactly one technical term with a bracketed plain-English definition.
-- **Level 4:** Must define every technical term in parentheses on first use. Must cover: what it is → why it matters → one trade-off.
-- **Level 5:** Must cover: exact mechanism, performance characteristics, trade-offs, when NOT to use, at least one alternative with comparison.
-
-Edge cases handled: abstract concepts, math-heavy content, process descriptions, non-technical topics.
+Add your env vars in the Vercel dashboard under Project → Settings → Environment Variables.
