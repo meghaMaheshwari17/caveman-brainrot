@@ -14,67 +14,53 @@ export const LEVEL_EMOJIS: Record<number, string> = {
   5: "🔬",
 };
 
-export const buildExtractionPrompt = (content: string, wordCount: number) => `
-You are an expert teacher. Extract 4-6 load-bearing concepts from the content below — ideas that, if skipped, break understanding of the whole topic. Then explain each at 5 levels.
+const LEVEL_RULES: Record<number, string> = {
+  1: `CAVEMAN LEVEL.
+- Max 6 words per line. Broken grammar. Caps for emphasis.
+- Only primitive words: good, bad, fast, slow, big, small, many, hurt, cry, happy, die, give, take, store, find, go, come, eat, fire, rock, tribe + the topic words.
+- Use -> for cause and effect.
+- Example lines: "database good." / "many people -> database slow" / "DATABASE CRY." / "cache like rock near cave -> fast"`,
 
-LEVEL RULES (follow strictly):
+  2: `TODDLER LEVEL (5-year-old).
+- Simple everyday words only. No jargon.
+- Analogies: toys, cookies, juice box, playground, backpack, fridge, kitchen, piggy bank.
+- Use "it's like..." and "because".
+- Example: "database is like a big toy box" / "too many kids want toys -> toy box tired" / "cache is like a snack on your desk -> no need walk to kitchen"`,
 
-🪨 LEVEL 1 — CAVEMAN
-- Max 5 words per sentence. Use CAPS for key word.
-- Only: fire, food, hunt, tribe, rock, big, small, fast, slow, good, bad, strong, weak, store, find, give, take, run, build, eat, know, remember + the concept word
-- Start with "UGH." — 3-4 sentences. Map everything to food/fire/hunting/shelter.
-- Example: "UGH. FIRE cook meat. Meat give strong. No fire, tribe die."
+  3: `MIDDLE SCHOOLER LEVEL.
+- Gaming / YouTube / social media analogies: lag, loading screen, inventory, RAM, Wi-Fi, respawn, server, FPS, cache, glitch.
+- Introduce real tech terms but immediately explain in [brackets]: "Redis [a super-fast in-memory store]"
+- Use: "basically", "lowkey", "ngl", "imagine if", "bro".
+- Cause-effect with ->`,
 
-🧸 LEVEL 2 — TODDLER
-- Objects a 5-year-old knows: toys, juice, cookies, playground, blocks, TV, backpack, puppy
-- Must include "It's like when you..." at least once
-- Max 2-syllable words, use "because" to chain logic — 3-5 sentences
+  4: `NORMAL HUMAN LEVEL.
+- Smart-friend tone. No fluff, no condescension.
+- Explain every technical term in parentheses on first use: "latency (the delay between request and response)"
+- One strong real-world analogy (restaurant kitchen, library, post office, traffic).
+- Cover: what it is -> why it matters -> how it works -> one trade-off.`,
 
-🎮 LEVEL 3 — MIDDLE SCHOOLER
-- Use gaming/YouTube analogy: Minecraft, Discord, lag, loading screen, inventory, Wi-Fi, respawn, loot
-- Introduce exactly ONE technical term with brackets: "cache [a super-fast storage spot]"
-- Use: "basically", "lowkey", "imagine if", "ngl" — 4-6 sentences
-
-🧠 LEVEL 4 — NORMAL HUMAN
-- Smart-friend tone. Every new technical term gets a plain-English definition in parentheses on first use.
-- One real-world analogy (library, kitchen, traffic, etc.)
-- Cover: what it is → why it matters → one trade-off — 5-7 sentences
-
-🔬 LEVEL 5 — EXPERT
+  5: `EXPERT LEVEL.
 - Full technical precision. No analogies, no hand-holding.
-- Cover: mechanism, performance characteristics, trade-offs vs alternatives, when NOT to use it, common pitfalls.
-- Name at least one alternative approach and contrast it — 6-9 sentences
+- Use proper terms: O() notation, consistency models, eviction policies, etc.
+- Cover: mechanism, performance characteristics, trade-offs vs alternatives, when NOT to use, common pitfalls.
+- Name at least one alternative and contrast it.`,
+};
 
-EDGE CASES:
-- Abstract concepts: Level 1-2 must use food/hunting/toy parallel — always findable
-- Math-heavy: Level 1-2 explain intuition only, Level 4-5 can use notation
-- Non-technical content: same rules, extract the load-bearing ideas
+export const buildBrainrotPrompt = (question: string, level: number): string => `
+You are a brainrot explainer. Answer the question below in numbered short lines.
 
-OUTPUT — strict JSON only, no markdown, no extra text:
-{
-  "topic": "3-5 word topic",
-  "compressionStats": {
-    "inputWordCount": ${wordCount},
-    "estimatedReadMinutes": 0
-  },
-  "concepts": [
-    {
-      "id": "concept-1",
-      "title": "2-4 word title",
-      "whyItMatters": "One sentence: why skipping this breaks understanding.",
-      "levels": {
-        "1": "caveman text",
-        "2": "toddler text",
-        "3": "middle schooler text",
-        "4": "normal human text",
-        "5": "expert text"
-      }
-    }
-  ]
-}
+LEVEL: ${level} — ${LEVEL_NAMES[level]}
+${LEVEL_RULES[level]}
 
-Set estimatedReadMinutes = number of concepts × 0.5.
+FORMAT RULES (follow exactly):
+- Numbered short lines: "1. ...", "2. ...", etc.
+- Use -> for cause/effect: "many users -> database slow"
+- Group related thoughts with a blank line between groups. Numbering resets to 1 for each group.
+- Each line: max 15 words.
+- Total: 10–20 lines across all groups.
+- Tell a complete story: context -> problem -> solution -> how solution works -> trade-off or result.
+- NO headers. NO markdown. NO intro like "Sure!" or "Here's the answer:". Just the numbered lines.
+- Return ONLY the formatted answer. Nothing else.
 
-CONTENT:
-${content}
+QUESTION: ${question.trim()}
 `.trim();
