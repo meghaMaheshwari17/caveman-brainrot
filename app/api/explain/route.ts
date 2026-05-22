@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { extractAndExplain } from "@/lib/claude";
+import { extractAndExplain, UserProvider } from "@/lib/claude";
+
+const VALID_PROVIDERS: UserProvider[] = ["gemini", "openai"];
 
 export async function POST(req: NextRequest) {
   try {
-    const { content, apiKey } = await req.json();
+    const { content, provider, apiKey } = await req.json();
 
     if (!content || typeof content !== "string" || content.trim().length < 50) {
       return NextResponse.json(
@@ -12,10 +14,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await extractAndExplain(content, apiKey || undefined);
+    // Build user config only if they provided a valid key + provider
+    const userConfig =
+      apiKey && provider && VALID_PROVIDERS.includes(provider)
+        ? { provider: provider as UserProvider, apiKey }
+        : undefined;
+
+    const result = await extractAndExplain(content, userConfig);
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to process content";
+    const message =
+      error instanceof Error ? error.message : "Failed to process content";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
