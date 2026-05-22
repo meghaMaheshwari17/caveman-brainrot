@@ -41,7 +41,7 @@ import { buildExtractionPrompt } from "./prompts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserProvider = "gemini" | "openai";
+export type UserProvider = "gemini" | "openai" | "groq";
 
 export interface UserConfig {
   provider: UserProvider;
@@ -109,6 +109,10 @@ type State = typeof PipelineState.State;
 // ─── Model factory ────────────────────────────────────────────────────────────
 
 function buildModel(userConfig?: UserConfig) {
+  // maxTokens cap — prevents runaway generation and reduces cost/quota burn.
+  // 2500 is enough for 6 concepts × 5 levels with room to spare.
+  const MAX_TOKENS = 2500;
+
   // Priority 1: user-provided key from browser Settings
   if (userConfig?.apiKey && userConfig?.provider) {
     if (userConfig.provider === "gemini") {
@@ -116,6 +120,7 @@ function buildModel(userConfig?: UserConfig) {
         apiKey: userConfig.apiKey,
         model: "gemini-2.0-flash",
         temperature: 0.2,
+        maxOutputTokens: MAX_TOKENS,
       });
     }
     if (userConfig.provider === "openai") {
@@ -123,6 +128,16 @@ function buildModel(userConfig?: UserConfig) {
         apiKey: userConfig.apiKey,
         model: "gpt-4o-mini",
         temperature: 0.2,
+        maxTokens: MAX_TOKENS,
+      });
+    }
+    if (userConfig.provider === "groq") {
+      return new ChatOpenAI({
+        apiKey: userConfig.apiKey,
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.2,
+        maxTokens: MAX_TOKENS,
+        configuration: { baseURL: "https://api.groq.com/openai/v1" },
       });
     }
   }
@@ -133,28 +148,40 @@ function buildModel(userConfig?: UserConfig) {
     return new ChatOpenAI({
       apiKey: process.env.DEVSTRAL_API_KEY,
       model: process.env.DEVSTRAL_MODEL || "devstral",
-      configuration: {
-        baseURL: process.env.DEVSTRAL_BASE_URL,
-      },
+      configuration: { baseURL: process.env.DEVSTRAL_BASE_URL },
       temperature: 0.2,
+      maxTokens: MAX_TOKENS,
     });
   }
 
-  // Priority 3: OpenAI env fallback
+  // Priority 3: Groq env fallback (free, fast — recommended default)
+  if (process.env.GROQ_API_KEY) {
+    return new ChatOpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.2,
+      maxTokens: MAX_TOKENS,
+      configuration: { baseURL: "https://api.groq.com/openai/v1" },
+    });
+  }
+
+  // Priority 4: OpenAI env fallback
   if (process.env.OPENAI_API_KEY) {
     return new ChatOpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       model: "gpt-4o-mini",
       temperature: 0.2,
+      maxTokens: MAX_TOKENS,
     });
   }
 
-  // Priority 4: Gemini env fallback
+  // Priority 5: Gemini env fallback
   if (process.env.GEMINI_API_KEY) {
     return new ChatGoogleGenerativeAI({
       apiKey: process.env.GEMINI_API_KEY,
       model: "gemini-2.0-flash",
       temperature: 0.2,
+      maxOutputTokens: MAX_TOKENS,
     });
   }
 
@@ -230,7 +257,9 @@ async function parseAndValidate(state: State): Promise<Partial<State>> {
  * edge, not nested try/catch.
  */
 function shouldRetry(state: State): "invoke_model" | typeof END {
-  if (!state.result && state.retries < 3) return "invoke_model";
+  // Max 2 attempts (1 initial + 1 self-correction).
+  // 3 retries was causing 3× token burn on bad outputs.
+  if (!state.result && state.retries < 2) return "invoke_model";
   return END;
 }
 
@@ -256,8 +285,11 @@ export async function extractAndExplain(
   content: string,
   userConfig?: UserConfig
 ): Promise<ExplainResult> {
-  const wordCount = content.trim().split(/\s+/).length;
-  const truncated = content.trim().split(/\s+/).slice(0, 4000).join(" ");
+  const words = content.trim().split(/\s+/);
+  const wordCount = words.length;
+  // Cap at 2,000 words (~2,500 tokens). Was 4,000 — halved to cut input cost.
+  // The model extracts concepts from key ideas, not every word.
+  const truncated = words.slice(0, 2000).join(" ");
   const prompt = buildExtractionPrompt(truncated, wordCount);
 
   const app = buildGraph(userConfig);

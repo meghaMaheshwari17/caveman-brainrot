@@ -9,6 +9,7 @@ const KEYS = {
   provider: "caveman_provider",
   gemini: "caveman_gemini_key",
   openai: "caveman_openai_key",
+  groq: "caveman_groq_key",
 } as const;
 
 export interface UserSettings {
@@ -24,17 +25,20 @@ export function useUserSettings() {
 
   useEffect(() => {
     const provider = localStorage.getItem(KEYS.provider) as UserProvider | null;
-    const apiKey = provider ? (localStorage.getItem(KEYS[provider]) || "") : "";
+    const storageKey = provider && provider in KEYS ? KEYS[provider as keyof typeof KEYS] : null;
+    const apiKey = storageKey ? (localStorage.getItem(storageKey) || "") : "";
     setSettings({ provider, apiKey });
   }, []);
 
   const saveSettings = (next: UserSettings) => {
     if (next.provider) {
       localStorage.setItem(KEYS.provider, next.provider);
-      if (next.apiKey.trim()) localStorage.setItem(KEYS[next.provider], next.apiKey.trim());
-      else localStorage.removeItem(KEYS[next.provider]);
+      const storageKey = KEYS[next.provider as keyof typeof KEYS];
+      if (storageKey) {
+        if (next.apiKey.trim()) localStorage.setItem(storageKey, next.apiKey.trim());
+        else localStorage.removeItem(storageKey);
+      }
     } else {
-      // Cleared — use server default
       localStorage.removeItem(KEYS.provider);
     }
     setSettings(next);
@@ -47,11 +51,19 @@ export function useUserSettings() {
 
 const PROVIDERS = [
   {
+    id: "groq" as UserProvider,
+    label: "Groq",
+    emoji: "⚡",
+    placeholder: "gsk_...",
+    getKeyURL: "https://console.groq.com/keys",
+    getKeyLabel: "console.groq.com",
+    model: "llama-3.3-70b-versatile",
+    freeNote: "Free & fast — recommended",
+  },
+  {
     id: "gemini" as UserProvider,
     label: "Gemini",
     emoji: "✦",
-    color: "from-blue-600 to-cyan-500",
-    activeBg: "bg-gradient-to-r from-blue-600 to-cyan-500",
     placeholder: "AIza...",
     getKeyURL: "https://aistudio.google.com/apikey",
     getKeyLabel: "aistudio.google.com",
@@ -62,8 +74,6 @@ const PROVIDERS = [
     id: "openai" as UserProvider,
     label: "OpenAI",
     emoji: "⬡",
-    color: "from-emerald-600 to-teal-500",
-    activeBg: "bg-gradient-to-r from-emerald-600 to-teal-500",
     placeholder: "sk-...",
     getKeyURL: "https://platform.openai.com/api-keys",
     getKeyLabel: "platform.openai.com",
@@ -81,7 +91,7 @@ interface Props {
 
 export default function SettingsModal({ currentSettings, onClose, onSave }: Props) {
   const [provider, setProvider] = useState<UserProvider | null>(currentSettings.provider);
-  const [keys, setKeys] = useState({ gemini: "", openai: "" });
+  const [keys, setKeys] = useState({ gemini: "", openai: "", groq: "" });
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -91,6 +101,7 @@ export default function SettingsModal({ currentSettings, onClose, onSave }: Prop
     setKeys({
       gemini: localStorage.getItem(KEYS.gemini) || "",
       openai: localStorage.getItem(KEYS.openai) || "",
+      groq: localStorage.getItem(KEYS.groq) || "",
     });
     requestAnimationFrame(() => setVisible(true));
   }, []);
@@ -177,7 +188,7 @@ export default function SettingsModal({ currentSettings, onClose, onSave }: Prop
           </div>
 
           {/* Provider buttons */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {PROVIDERS.map((p) => (
               <button
                 key={p.id}
