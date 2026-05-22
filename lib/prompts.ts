@@ -55,7 +55,7 @@ ${LEVEL_RULES[level]}
 FORMAT RULES (follow exactly):
 - Numbered short lines: "1. ...", "2. ...", etc.
 - Use -> for cause/effect: "many users -> database slow"
-- Group related thoughts with a blank line between groups. Numbering resets to 1 for each group.
+- Group related thoughts with a blank line between groups. Numbering is CONTINUOUS — never reset. Line 1, 2, 3... all the way through.
 - Each line: max 15 words.
 - Total: 10–20 lines across all groups.
 - Tell a complete story: context -> problem -> solution -> how solution works -> trade-off or result.

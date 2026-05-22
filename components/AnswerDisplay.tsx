@@ -8,25 +8,49 @@ interface AnswerDisplayProps {
   level: number;
 }
 
-/**
- * Renders the brainrot answer.
- * The model returns numbered lines separated by blank lines (paragraph groups).
- * We render each group as a block, with lines styled per level.
- */
-export default function AnswerDisplay({ question, answer, level }: AnswerDisplayProps) {
-  // Split into paragraph groups on blank lines
-  const groups = answer
-    .split(/\n{2,}/)
-    .map((g) => g.trim())
-    .filter(Boolean);
+const TEXT_STYLE: Record<number, string> = {
+  1: "font-black text-lg uppercase tracking-wide text-stone-100 leading-snug",
+  2: "font-medium text-base text-stone-200 leading-snug",
+  3: "font-normal text-base text-stone-200 leading-snug",
+  4: "font-normal text-[15px] text-stone-200 leading-relaxed",
+  5: "font-normal text-sm text-stone-300 font-mono leading-relaxed",
+};
 
-  const isLevel1 = level === 1;
+/** Render a line's text, turning -> into a styled amber arrow */
+function renderLine(text: string) {
+  // Strip any leading number+dot the model may have added (we handle numbering ourselves)
+  const stripped = text.replace(/^\d+\.\s*/, "");
+  const parts = stripped.split("->");
+
+  return parts.map((part, i) => (
+    <span key={i}>
+      {part}
+      {i < parts.length - 1 && (
+        <span className="text-amber-500 font-bold mx-1">→</span>
+      )}
+    </span>
+  ));
+}
+
+export default function AnswerDisplay({ question, answer, level }: AnswerDisplayProps) {
+  // Split into paragraph groups on blank lines, collect all lines with their group index
+  const groups: string[][] = answer
+    .split(/\n{2,}/)
+    .map((g) =>
+      g.split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+    )
+    .filter((g) => g.length > 0);
+
+  // Build a flat counter across all groups for continuous numbering
+  let counter = 0;
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      {/* Question echo */}
+      {/* Question */}
       <div className="flex items-start gap-3 mb-6">
-        <div className="w-7 h-7 rounded-full bg-stone-700 flex items-center justify-center text-sm shrink-0 mt-0.5">
+        <div className="w-7 h-7 rounded-full bg-stone-700 flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 text-stone-400">
           you
         </div>
         <p className="text-stone-300 text-base font-medium pt-0.5">{question}</p>
@@ -39,50 +63,28 @@ export default function AnswerDisplay({ question, answer, level }: AnswerDisplay
         </div>
 
         <div className="flex-1 space-y-4">
-          {groups.map((group, gi) => {
-            const lines = group
-              .split("\n")
-              .map((l) => l.trim())
-              .filter(Boolean);
-
-            return (
-              <div key={gi} className="space-y-1">
-                {lines.map((line, li) => {
-                  // Highlight -> as a styled arrow
-                  const parts = line.split("->").map((p, i, arr) => (
-                    <span key={i}>
-                      {p}
-                      {i < arr.length - 1 && (
-                        <span className="text-amber-500 font-bold mx-1">→</span>
-                      )}
+          {groups.map((lines, gi) => (
+            <div key={gi} className="space-y-1.5">
+              {lines.map((line) => {
+                counter += 1;
+                const n = counter;
+                return (
+                  <div key={n} className="flex items-baseline gap-2">
+                    {/* Number */}
+                    <span className="text-stone-600 text-xs font-mono w-5 shrink-0 text-right select-none">
+                      {n}.
                     </span>
-                  ));
-
-                  return (
-                    <p
-                      key={li}
-                      className={`leading-snug ${
-                        isLevel1
-                          ? "font-black text-lg uppercase tracking-wide text-stone-100"
-                          : level === 2
-                          ? "font-medium text-base text-stone-200"
-                          : level === 3
-                          ? "font-normal text-base text-stone-200"
-                          : level === 4
-                          ? "font-normal text-[15px] text-stone-200 leading-relaxed"
-                          : "font-normal text-sm text-stone-300 font-mono leading-relaxed"
-                      }`}
-                    >
-                      {parts}
+                    {/* Line */}
+                    <p className={TEXT_STYLE[level]}>
+                      {renderLine(line)}
                     </p>
-                  );
-                })}
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
 
-          {/* Level badge */}
-          <p className="text-stone-600 text-xs mt-2">
+          <p className="text-stone-700 text-xs mt-3 ml-7">
             {LEVEL_EMOJIS[level]} {LEVEL_NAMES[level]} level
           </p>
         </div>
